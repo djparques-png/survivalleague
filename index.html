@@ -121,6 +121,10 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
 .fixtures-header-row{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px}
 .gw-select-wrap{max-width:220px}
 .tbc-pill{font-size:10.5px;font-weight:800;color:var(--gold);background:#f8c65a1c;padding:2px 7px;border-radius:99px;margin-left:6px}
+.revealed-box{border:1px solid #c9f75255;background:#c9f75210;border-radius:14px;padding:16px;margin-top:16px}
+.revealed-box b{color:var(--lime);display:block;margin-bottom:8px}
+.reveal-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.reveal-row:last-child{border-bottom:none}
 @media(max-width:780px){.two-col,.row,.row3,.ledger-cols{grid-template-columns:1fr}.teams,.name-grid{grid-template-columns:repeat(2,1fr)}.shell{padding:15px}table{font-size:12px}th,td{padding:7px 5px}}
 </style>
 </head>
@@ -197,13 +201,14 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
             <p class="tz-note" id="kickoffNote"></p>
             <div id="pickArea"></div>
             <div id="pickDebug"></div>
+            <div id="revealedPanel"></div>
           </div>
         </div>
         <div>
           <div class="card">
             <div class="section-title"><h2>Your pick</h2><span class="tag">Private</span></div>
             <div id="yourPickPanel"></div>
-            <div class="lock" style="margin-top:14px"><b>Picks stay private</b>No one — including the commissioner — can see anyone else's pick for the open gameweek until it is closed and revealed. The commish can't see what you submit. He sees what you see. #democracy</div>
+            <div class="lock" style="margin-top:14px"><b>Picks stay private</b>No one — including the commissioner — can see anyone else's pick for the open gameweek until it is revealed or closed. The commish can't see what you submit. He sees what you see. #democracy</div>
           </div>
         </div>
       </div>
@@ -314,8 +319,13 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
         <div class="card"><div class="section-title"><h2>Accounts</h2></div><div id="accountList" style="margin-top:10px"></div></div>
         <div class="card"><div class="section-title"><h2>Submission status (commissioner view)</h2></div><div id="commishCounter" class="small" style="margin-top:8px;font-weight:700"></div></div>
         <div id="sensitiveCommishArea">
+          <div class="card">
+            <div class="section-title"><h2>Reveal picks</h2><span class="tag gold">Independent of scoring</span></div>
+            <p class="small">Once the cutoff has passed, you can reveal everyone's picks right away — before match results are known. This is separate from closing the gameweek, which happens later once games finish and results need scoring.</p>
+            <div id="revealArea" style="margin-top:10px"></div>
+          </div>
           <div class="card"><div class="section-title"><h2>Missed the cutoff</h2><span class="tag danger">Rule 4 — spin the wheel</span></div><div id="missedArea"></div></div>
-          <div class="card"><div class="section-title"><h2>Close & score gameweek</h2><span class="tag gold">Reveals picks + updates tracker + saves CSV</span></div><div id="scoreArea"></div><button class="btn" id="closeGwBtn" style="margin-top:14px">Close gameweek & reveal picks</button></div>
+          <div class="card"><div class="section-title"><h2>Close & score gameweek</h2><span class="tag gold">Finalizes results + updates tracker + saves CSV</span></div><div id="scoreArea"></div><button class="btn" id="closeGwBtn" style="margin-top:14px">Close gameweek & finalize results</button></div>
         </div>
         <div class="card">
           <div class="section-title"><h2>Records & exports</h2><span class="tag">Always available</span></div>
@@ -356,7 +366,7 @@ document.querySelectorAll('.pin-input').forEach(inp=>{
 
 let claimingName = null;
 let selectedFixtureGw = null;
-let CACHE = { roster:[], claimedNames:[], gw:1, deadline:null, firstKickoff:null, closed:false, usedTeams:{}, playerState:{}, submitted:0, submittedNames:[], fixtures:[], top3Favorites:[], loadedGws:[] };
+let CACHE = { roster:[], claimedNames:[], gw:1, deadline:null, firstKickoff:null, closed:false, revealed:false, usedTeams:{}, playerState:{}, submitted:0, submittedNames:[], fixtures:[], top3Favorites:[], loadedGws:[] };
 
 function toast(msg){
   const t=document.querySelector('#toast');
@@ -374,14 +384,11 @@ async function getMyPick(gw, name){
   return { pick: data || null, errMsg: null };
 }
 
-// FIX: "current gameweek" is the EARLIEST gameweek that is still open (not closed) —
-// not simply the highest gw number. With the full season pre-loaded (GW1-38 all
-// exist), ordering by gw DESC used to always return GW38. This resolves it.
 async function getCurrentGameweekRow(){
   const { data: openGws } = await sb.from('gameweeks').select('*').eq('closed', false).order('gw', { ascending: true }).limit(1);
   if(openGws && openGws.length) return openGws[0];
   const { data: anyGws } = await sb.from('gameweeks').select('*').order('gw', { ascending: false }).limit(1);
-  return (anyGws && anyGws[0]) || { gw:1, deadline:new Date().toISOString(), closed:false, first_kickoff:null, top3_favorites:[] };
+  return (anyGws && anyGws[0]) || { gw:1, deadline:new Date().toISOString(), closed:false, revealed:false, first_kickoff:null, top3_favorites:[] };
 }
 
 async function loadCore(){
@@ -389,7 +396,7 @@ async function loadCore(){
   CACHE.roster = (rosterRows||[]).map(r=>r.name);
 
   const gw = await getCurrentGameweekRow();
-  CACHE.gw = gw.gw; CACHE.deadline = gw.deadline; CACHE.closed = gw.closed; CACHE.firstKickoff = gw.first_kickoff;
+  CACHE.gw = gw.gw; CACHE.deadline = gw.deadline; CACHE.closed = gw.closed; CACHE.revealed = !!gw.revealed; CACHE.firstKickoff = gw.first_kickoff;
   CACHE.top3Favorites = gw.top3_favorites || [];
 
   const { data: allGws } = await sb.from('gameweeks').select('gw').order('gw');
@@ -671,6 +678,16 @@ function renderYourPickPanel(myPick, errMsg){
   debugArea.innerHTML = errMsg ? `<div class="debug-error">Debug — could not verify your pick: ${errMsg}</div>` : '';
 }
 
+async function renderRevealedPanel(){
+  const box = document.querySelector('#revealedPanel');
+  if(!CACHE.revealed || CACHE.closed){ box.innerHTML = ''; return; }
+  const { data: picks, error } = await sb.from('picks').select('player_name, team, life_line, auto_assigned').eq('gw', CACHE.gw).order('player_name');
+  if(error || !picks){ box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="revealed-box"><b>🔓 Gameweek ${CACHE.gw} picks — revealed</b>${
+    picks.map(p=>`<div class="reveal-row"><span>${p.player_name}</span><span class="chip pending">${p.team}${p.life_line?' 🛡️':''}${p.auto_assigned?' 🎡':''}</span></div>`).join('')
+  }<p class="small" style="margin-top:8px">Results pending — the commissioner will close the gameweek once matches finish.</p></div>`;
+}
+
 async function renderPickArea(){
   const gw = CACHE.gw;
   const player = getSession();
@@ -681,6 +698,7 @@ async function renderPickArea(){
     ? `First kickoff: ${fmtLocal(CACHE.firstKickoff)} · shown in your device's own local time`
     : 'First kickoff time not set yet.';
   renderCountdown();
+  await renderRevealedPanel();
   if(!player){ area.innerHTML='<p class="small">Please log in.</p>'; return; }
 
   const ps = playerState(player);
@@ -965,7 +983,7 @@ async function renderCommish(){
 
   const player = getSession();
   const selfSubmitted = await hasSubmittedThisGw(player);
-  const needsFairPlayGate = !CACHE.closed && !deadlinePassed() && !selfSubmitted;
+  const needsFairPlayGate = !CACHE.closed && !CACHE.revealed && !deadlinePassed() && !selfSubmitted;
 
   document.querySelector('#fairPlayWarning').classList.toggle('hidden', !needsFairPlayGate);
   document.querySelector('#sensitiveCommishArea').classList.toggle('hidden', needsFairPlayGate);
@@ -996,6 +1014,24 @@ async function renderCommish(){
   }));
 
   if(needsFairPlayGate) return;
+
+  // Reveal area
+  const revealArea = document.querySelector('#revealArea');
+  if(CACHE.closed){
+    revealArea.innerHTML = '<p class="small">This gameweek is already closed — picks are visible in the Tracker history.</p>';
+  } else if(CACHE.revealed){
+    revealArea.innerHTML = '<p class="small">✅ Picks for this gameweek are already revealed to everyone.</p>';
+  } else if(!deadlinePassed()){
+    revealArea.innerHTML = "<p class='small'>Cutoff hasn't passed yet — wait until the deadline before revealing, so no one can react to others' picks.</p>";
+  } else {
+    revealArea.innerHTML = '<button class="btn gold" id="revealPicksBtn">🔓 Reveal all picks for Gameweek ' + CACHE.gw + ' now</button>';
+    document.querySelector('#revealPicksBtn').addEventListener('click', async ()=>{
+      const { error } = await sb.from('gameweeks').update({ revealed: true }).eq('gw', CACHE.gw);
+      if(error){ toast('Could not reveal picks — try again. (' + error.message + ')'); return; }
+      toast(`Gameweek ${CACHE.gw} picks revealed to everyone.`);
+      await renderCommish();
+    });
+  }
 
   const { data: picksNow } = await sb.from('picks').select('*').eq('gw', CACHE.gw);
   const submittedNames = (picksNow||[]).map(p=>p.player_name);
@@ -1111,7 +1147,7 @@ document.querySelector('#closeGwBtn').addEventListener('click', async ()=>{
   const csvText = csvRows.join('\n');
   await sb.from('gameweek_exports').upsert({ gw, csv: csvText, generated_at: new Date().toISOString() });
 
-  await sb.from('gameweeks').update({ closed: true }).eq('gw', gw);
+  await sb.from('gameweeks').update({ closed: true, revealed: true }).eq('gw', gw);
 
   toast(`Gameweek ${gw} closed, CSV saved. The app will now show the next open gameweek as current.`);
   selectedFixtureGw = null;
