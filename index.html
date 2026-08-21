@@ -125,6 +125,10 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
 .revealed-box b{color:var(--lime);display:block;margin-bottom:8px}
 .reveal-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
 .reveal-row:last-child{border-bottom:none}
+.season-progress{font-size:12px;font-weight:800;padding:5px 11px;border-radius:99px;background:#a9b7ad18;color:var(--muted)}
+.stat-box{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.rollover-note{border:1px solid #c9f75244;background:#c9f75210;border-radius:12px;padding:12px 14px;font-size:13px;color:var(--muted)}
+.rollover-note b{color:var(--lime)}
 @media(max-width:780px){.two-col,.row,.row3,.ledger-cols{grid-template-columns:1fr}.teams,.name-grid{grid-template-columns:repeat(2,1fr)}.shell{padding:15px}table{font-size:12px}th,td{padding:7px 5px}}
 </style>
 </head>
@@ -178,6 +182,7 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
     <header class="top">
       <div class="brand"><div class="crest">♛</div> SURVIVAL LEAGUE</div>
       <div class="pill-row">
+        <span class="season-progress" id="seasonProgressChip"></span>
         <span class="countdown" id="countdownChip"></span>
         <span class="userchip" id="currentUserChip"></span>
         <button class="btn ghost sm" id="logoutBtn2">Log out</button>
@@ -240,6 +245,11 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
     </section>
 
     <section id="tab-tracker" class="hidden">
+      <div class="card hidden" id="liveDashboardCard">
+        <div class="section-title"><h2 id="liveDashboardTitle">Live Gameweek Dashboard</h2><span class="tag gold">Picks revealed — results pending</span></div>
+        <div class="stat-box" id="liveDashboardStats"></div>
+        <div style="overflow-x:auto"><table id="liveDashboardTable"></table></div>
+      </div>
       <div class="card"><div class="section-title"><h2>Teams used tracker</h2><span class="tag">Locked-in weeks only</span></div><div style="overflow-x:auto"><table id="usedTable"></table></div></div>
       <div class="card"><div class="section-title"><h2>Standings</h2><span class="tag gold">Winner takes all</span></div><div style="overflow-x:auto"><table id="standingsTable"></table></div></div>
       <div class="card"><div class="section-title"><h2>Gameweek history</h2><span class="tag">CSV per week</span></div><div id="historyList"></div></div>
@@ -284,6 +294,9 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
           <button class="btn sm" id="goSubmitBtn">Go make my pick now</button>
         </div>
         <div class="card">
+          <div class="rollover-note"><b>No "start next gameweek" button needed.</b> All 38 gameweeks are pre-loaded with their own fixtures and cutoffs. The moment you close the current gameweek below, the app automatically shows the next gameweek as current everywhere — Pick tab, Fixtures dropdown, deadlines, all of it. Nothing to roll over manually.</div>
+        </div>
+        <div class="card">
           <div class="section-title"><h2>Manage roster</h2><span class="tag">Add or remove names</span></div>
           <p class="small">Removing a name that's already signed up permanently deletes their account, picks, and history. This takes effect for everyone immediately.</p>
           <div class="row" style="margin-top:10px">
@@ -321,7 +334,7 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
         <div id="sensitiveCommishArea">
           <div class="card">
             <div class="section-title"><h2>Reveal picks</h2><span class="tag gold">Independent of scoring</span></div>
-            <p class="small">Once the cutoff has passed, you can reveal everyone's picks right away — before match results are known. This is separate from closing the gameweek, which happens later once games finish and results need scoring.</p>
+            <p class="small">Once the cutoff has passed, you can reveal everyone's picks right away — before match results are known. This also unlocks the Live Gameweek Dashboard on the Tracker tab for everyone to see pick distribution and stats.</p>
             <div id="revealArea" style="margin-top:10px"></div>
           </div>
           <div class="card"><div class="section-title"><h2>Missed the cutoff</h2><span class="tag danger">Rule 4 — spin the wheel</span></div><div id="missedArea"></div></div>
@@ -594,6 +607,12 @@ function buildGwOptions(selected){
   return opts.join('');
 }
 
+function renderSeasonProgress(){
+  const chip = document.querySelector('#seasonProgressChip');
+  if(!chip) return;
+  chip.textContent = `GW ${CACHE.gw} of ${MAX_GAMEWEEKS}`;
+}
+
 async function renderFixturesTab(){
   const sel = document.querySelector('#fixtureGwSelect');
   sel.innerHTML = buildGwOptions(selectedFixtureGw);
@@ -655,12 +674,15 @@ setInterval(async ()=>{
   if(document.querySelector('#appScreen').classList.contains('hidden')) return;
   await loadCore();
   renderCountdown();
+  renderSeasonProgress();
   const pickTabVisible = !document.querySelector('#tab-pick').classList.contains('hidden');
   if(pickTabVisible){ await renderPickArea(); }
   const dashVisible = !document.querySelector('#tab-dashboard').classList.contains('hidden');
   if(dashVisible){ renderDashboardTab(); }
   const fxVisible = !document.querySelector('#tab-fixtures').classList.contains('hidden');
   if(fxVisible){ renderFixturesList(); }
+  const trackerVisible = !document.querySelector('#tab-tracker').classList.contains('hidden');
+  if(trackerVisible){ await renderLiveDashboard(); }
 }, 20000);
 
 // ---------- PICK TAB ----------
@@ -685,7 +707,7 @@ async function renderRevealedPanel(){
   if(error || !picks){ box.innerHTML = ''; return; }
   box.innerHTML = `<div class="revealed-box"><b>🔓 Gameweek ${CACHE.gw} picks — revealed</b>${
     picks.map(p=>`<div class="reveal-row"><span>${p.player_name}</span><span class="chip pending">${p.team}${p.life_line?' 🛡️':''}${p.auto_assigned?' 🎡':''}</span></div>`).join('')
-  }<p class="small" style="margin-top:8px">Results pending — the commissioner will close the gameweek once matches finish.</p></div>`;
+  }<p class="small" style="margin-top:8px">Results pending — the commissioner will close the gameweek once matches finish. See the Tracker tab for a full stats dashboard.</p></div>`;
 }
 
 async function renderPickArea(){
@@ -698,6 +720,7 @@ async function renderPickArea(){
     ? `First kickoff: ${fmtLocal(CACHE.firstKickoff)} · shown in your device's own local time`
     : 'First kickoff time not set yet.';
   renderCountdown();
+  renderSeasonProgress();
   await renderRevealedPanel();
   if(!player){ area.innerHTML='<p class="small">Please log in.</p>'; return; }
 
@@ -805,7 +828,39 @@ function downloadCsv(filename, csvText){
   URL.revokeObjectURL(url);
 }
 
+async function renderLiveDashboard(){
+  const card = document.querySelector('#liveDashboardCard');
+  if(!CACHE.revealed || CACHE.closed){ card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  document.querySelector('#liveDashboardTitle').textContent = `Live Gameweek ${CACHE.gw} Dashboard`;
+
+  const { data: picks } = await sb.from('picks').select('player_name, team, life_line, auto_assigned').eq('gw', CACHE.gw).order('team');
+  const list = picks || [];
+
+  const dist = {};
+  list.forEach(p=>{
+    if(!dist[p.team]) dist[p.team] = [];
+    dist[p.team].push(p);
+  });
+  const teams = Object.keys(dist).sort((a,b)=> dist[b].length - dist[a].length);
+  const lifeLineCount = list.filter(p=>p.life_line).length;
+  const spunCount = list.filter(p=>p.auto_assigned).length;
+  const uniqueTeams = teams.length;
+
+  document.querySelector('#liveDashboardStats').innerHTML = `
+    <span class="tag">${list.length} total picks</span>
+    <span class="tag muted">${uniqueTeams} different teams picked</span>
+    <span class="tag gold">${lifeLineCount} life line${lifeLineCount===1?'':'s'} used</span>
+    <span class="tag danger">${spunCount} auto-spun (missed cutoff)</span>
+  `;
+
+  document.querySelector('#liveDashboardTable').innerHTML = `<tr><th>Team</th><th># Players</th><th>Who picked it</th></tr>` +
+    teams.map(t=>`<tr><td><b>${t}</b></td><td>${dist[t].length}</td><td>${dist[t].map(p=>p.player_name + (p.life_line?' 🛡️':'') + (p.auto_assigned?' 🎡':'')).join(', ')}</td></tr>`).join('');
+}
+
 async function renderTracker(){
+  await renderLiveDashboard();
+
   const { data: closedGwsData } = await sb.from('gameweeks').select('gw').eq('closed', true).order('gw');
   const closedGws = (closedGwsData||[]).map(r=>r.gw);
 
@@ -1015,12 +1070,11 @@ async function renderCommish(){
 
   if(needsFairPlayGate) return;
 
-  // Reveal area
   const revealArea = document.querySelector('#revealArea');
   if(CACHE.closed){
     revealArea.innerHTML = '<p class="small">This gameweek is already closed — picks are visible in the Tracker history.</p>';
   } else if(CACHE.revealed){
-    revealArea.innerHTML = '<p class="small">✅ Picks for this gameweek are already revealed to everyone.</p>';
+    revealArea.innerHTML = '<p class="small">✅ Picks for this gameweek are already revealed to everyone. Check the Tracker tab for the Live Dashboard.</p>';
   } else if(!deadlinePassed()){
     revealArea.innerHTML = "<p class='small'>Cutoff hasn't passed yet — wait until the deadline before revealing, so no one can react to others' picks.</p>";
   } else {
@@ -1149,7 +1203,7 @@ document.querySelector('#closeGwBtn').addEventListener('click', async ()=>{
 
   await sb.from('gameweeks').update({ closed: true, revealed: true }).eq('gw', gw);
 
-  toast(`Gameweek ${gw} closed, CSV saved. The app will now show the next open gameweek as current.`);
+  toast(`Gameweek ${gw} closed and finalized. The next gameweek is now active automatically — no extra steps needed.`);
   selectedFixtureGw = null;
   commishFixtureGw = null;
   await renderCommish();
@@ -1165,6 +1219,7 @@ async function renderAll(){
   renderRules();
   renderDashboardTab();
   renderCountdown();
+  renderSeasonProgress();
 }
 
 (async function init(){
