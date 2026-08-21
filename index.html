@@ -22,6 +22,7 @@ body{margin:0;background:radial-gradient(circle at 85% -10%,#244e38 0,transparen
 .tag{background:#c9f75218;color:var(--lime);padding:5px 10px;border-radius:999px;font-weight:750;font-size:12px;white-space:nowrap}
 .tag.danger{background:#ff806f22;color:var(--danger)}
 .tag.gold{background:#f8c65a22;color:var(--gold)}
+.tag.muted{background:#a9b7ad18;color:var(--muted)}
 select,input[type=text],input[type=password],input[type=number],input[type=datetime-local]{width:100%;background:#0b1812;border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:11px 12px;font-size:14px}
 input.pin-input{letter-spacing:8px;font-size:20px;text-align:center;font-weight:800}
 label.field{display:block;margin-bottom:12px}
@@ -111,10 +112,15 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
 .your-pick-panel .team-name{font-size:30px;font-weight:850;color:var(--lime);margin:8px 0 4px}
 .debug-error{background:#ff806f14;border:1px solid #ff806f55;color:#ffb3a6;font-size:11px;padding:8px 10px;border-radius:8px;margin-top:10px;font-family:monospace}
 .fixture-row{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#0b1812;margin-bottom:8px}
+.fixture-row.tbc{border-style:dashed;opacity:.85}
 .fixture-row .teams-vs{font-weight:700}
-.fixture-row .kickoff-time{color:var(--muted);font-size:12.5px}
+.fixture-row .kickoff-time{color:var(--muted);font-size:12.5px;text-align:right}
 .spin-result{text-align:center;padding:16px;border:2px dashed var(--gold);border-radius:14px;margin-top:10px}
 .spin-result .team-name{font-size:24px;font-weight:850;color:var(--gold)}
+.source-note{font-size:11px;color:var(--muted);margin-top:10px;font-style:italic}
+.fixtures-header-row{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.gw-select-wrap{max-width:220px}
+.tbc-pill{font-size:10.5px;font-weight:800;color:var(--gold);background:#f8c65a1c;padding:2px 7px;border-radius:99px;margin-left:6px}
 @media(max-width:780px){.two-col,.row,.row3,.ledger-cols{grid-template-columns:1fr}.teams,.name-grid{grid-template-columns:repeat(2,1fr)}.shell{padding:15px}table{font-size:12px}th,td{padding:7px 5px}}
 </style>
 </head>
@@ -205,8 +211,14 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
 
     <section id="tab-fixtures" class="hidden">
       <div class="card">
-        <div class="section-title"><h2 id="fixturesTitle">Gameweek 1 fixtures</h2><span class="tag">Kickoff times in your local time</span></div>
+        <div class="fixtures-header-row">
+          <div class="section-title" style="margin:0"><h2 id="fixturesTitle">Gameweek 1 fixtures</h2></div>
+          <div class="gw-select-wrap">
+            <label class="field" style="margin:0"><span>Choose gameweek</span><select id="fixtureGwSelect"></select></label>
+          </div>
+        </div>
         <div id="fixturesList"></div>
+        <div class="source-note" id="fixturesSourceNote"></div>
       </div>
     </section>
 
@@ -276,9 +288,12 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
           <div id="rosterManageList" style="margin-top:14px"></div>
         </div>
         <div class="card">
-          <div class="section-title"><h2>Fixtures for this gameweek</h2><span class="tag">Sets kickoff automatically</span></div>
-          <p class="small">Add every fixture for this gameweek. The earliest kickoff you enter automatically becomes the cutoff time (30 min before), synced for everyone.</p>
-          <div class="row3" style="margin-top:10px">
+          <div class="section-title"><h2>Fixtures — add, edit, or confirm any gameweek</h2><span class="tag">Sets cutoff automatically</span></div>
+          <p class="small">All 380 matchups for the full 2026/27 season are pre-loaded. Weeks with real broadcast-confirmed kickoff times are marked "Confirmed"; the rest use a default time and are marked "Time TBC" until the Premier League announces real broadcast slots (usually a few weeks out). Add or correct a fixture below — any fixture you add/edit here is treated as confirmed and becomes that week's cutoff basis.</p>
+          <label class="field" style="margin-top:10px"><span>Gameweek to edit</span>
+            <select id="commishFixtureGwSelect"></select>
+          </label>
+          <div class="row3">
             <input type="text" id="fixtureHome" placeholder="Home team">
             <input type="text" id="fixtureAway" placeholder="Away team">
             <input type="datetime-local" id="fixtureKickoff">
@@ -288,7 +303,7 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
         </div>
         <div class="card">
           <div class="section-title"><h2>Top 3 favorites this gameweek</h2><span class="tag danger">Excluded from the spin</span></div>
-          <p class="small">Set the 3 bookmaker favorites for this gameweek — the spin-the-wheel tool will never land on these for a missed pick.</p>
+          <p class="small">Set the 3 bookmaker favorites for the CURRENT open gameweek — the spin-the-wheel tool will never land on these for a missed pick.</p>
           <div class="row3" style="margin-top:10px">
             <select id="fav1"></select>
             <select id="fav2"></select>
@@ -321,6 +336,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const COMMISSIONER_NAME = "Joaquin";
 const SESSION_KEY='survival_league_session_v1';
+const MAX_GAMEWEEKS = 38;
 
 const PL_TEAMS = [
   "Arsenal","Aston Villa","Bournemouth","Brentford","Brighton & Hove Albion",
@@ -339,7 +355,8 @@ document.querySelectorAll('.pin-input').forEach(inp=>{
 });
 
 let claimingName = null;
-let CACHE = { roster:[], claimedNames:[], gw:1, deadline:null, firstKickoff:null, closed:false, usedTeams:{}, playerState:{}, submitted:0, submittedNames:[], fixtures:[], top3Favorites:[] };
+let selectedFixtureGw = null;
+let CACHE = { roster:[], claimedNames:[], gw:1, deadline:null, firstKickoff:null, closed:false, usedTeams:{}, playerState:{}, submitted:0, submittedNames:[], fixtures:[], top3Favorites:[], loadedGws:[] };
 
 function toast(msg){
   const t=document.querySelector('#toast');
@@ -366,7 +383,11 @@ async function loadCore(){
   CACHE.gw = gw.gw; CACHE.deadline = gw.deadline; CACHE.closed = gw.closed; CACHE.firstKickoff = gw.first_kickoff;
   CACHE.top3Favorites = gw.top3_favorites || [];
 
-  const { data: fx } = await sb.from('fixtures').select('*').eq('gw', gw.gw).order('kickoff');
+  const { data: allGws } = await sb.from('gameweeks').select('gw').order('gw');
+  CACHE.loadedGws = (allGws||[]).map(r=>r.gw);
+  if(selectedFixtureGw === null) selectedFixtureGw = CACHE.gw;
+
+  const { data: fx } = await sb.from('fixtures').select('*').eq('gw', selectedFixtureGw).order('kickoff');
   CACHE.fixtures = fx || [];
 
   const { data: names } = await sb.from('claimed_names').select('name');
@@ -395,6 +416,10 @@ function deadlinePassed(){ return CACHE.deadline && new Date() > new Date(CACHE.
 function fmtLocal(iso){
   if(!iso) return 'TBC';
   return new Date(iso).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', timeZoneName:'short'});
+}
+function fmtDateOnly(iso){
+  if(!iso) return 'TBC';
+  return new Date(iso).toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'});
 }
 function fmtDeadline(){ return fmtLocal(CACHE.deadline); }
 function msUntilDeadline(){ return CACHE.deadline ? new Date(CACHE.deadline) - new Date() : 0; }
@@ -533,7 +558,7 @@ document.querySelectorAll('#appScreen .tab').forEach(tab=>{
       document.querySelector('#tab-'+name).classList.toggle('hidden', name!==tab.dataset.tab);
     });
     await loadCore();
-    if(tab.dataset.tab==='fixtures') renderFixturesTab();
+    if(tab.dataset.tab==='fixtures') await renderFixturesTab();
     if(tab.dataset.tab==='ledger') await renderLedger();
     if(tab.dataset.tab==='tracker') await renderTracker();
     if(tab.dataset.tab==='rules') renderRules();
@@ -543,20 +568,52 @@ document.querySelectorAll('#appScreen .tab').forEach(tab=>{
   });
 });
 
-function renderFixturesTab(){
-  document.querySelector('#fixturesTitle').textContent = `Gameweek ${CACHE.gw} fixtures`;
+function buildGwOptions(selected){
+  const opts = [];
+  for(let i=1;i<=MAX_GAMEWEEKS;i++){
+    const loaded = CACHE.loadedGws.includes(i);
+    opts.push(`<option value="${i}" ${i===selected?'selected':''}>Gameweek ${i}${loaded?'':' (not loaded)'}</option>`);
+  }
+  return opts.join('');
+}
+
+async function renderFixturesTab(){
+  const sel = document.querySelector('#fixtureGwSelect');
+  sel.innerHTML = buildGwOptions(selectedFixtureGw);
+  sel.onchange = async ()=>{
+    selectedFixtureGw = parseInt(sel.value,10);
+    const { data: fx } = await sb.from('fixtures').select('*').eq('gw', selectedFixtureGw).order('kickoff');
+    CACHE.fixtures = fx || [];
+    renderFixturesList();
+  };
+  renderFixturesList();
+}
+
+function renderFixturesList(){
+  document.querySelector('#fixturesTitle').textContent = `Gameweek ${selectedFixtureGw} fixtures`;
   const list = document.querySelector('#fixturesList');
+  const note = document.querySelector('#fixturesSourceNote');
   if(!CACHE.fixtures.length){
-    list.innerHTML = '<p class="small">No fixtures added yet for this gameweek — check back soon.</p>';
+    list.innerHTML = '<p class="small">No fixtures loaded yet for this gameweek.</p>';
+    note.textContent = '';
     return;
   }
+  const favs = selectedFixtureGw === CACHE.gw ? CACHE.top3Favorites : [];
+  const anyTbc = CACHE.fixtures.some(f => f.time_confirmed === false);
   list.innerHTML = CACHE.fixtures.map(f=>{
-    const isFav = CACHE.top3Favorites.includes(f.home) || CACHE.top3Favorites.includes(f.away);
-    return `<div class="fixture-row">
+    const isFav = favs.includes(f.home) || favs.includes(f.away);
+    const confirmed = f.time_confirmed !== false;
+    const timeHtml = confirmed
+      ? fmtLocal(f.kickoff)
+      : `${fmtDateOnly(f.kickoff)}<span class="tbc-pill">TIME TBC</span>`;
+    return `<div class="fixture-row ${confirmed?'':'tbc'}">
       <div><span class="teams-vs">${f.home} vs ${f.away}</span>${isFav?' <span class="chip fav">Favorite in this match</span>':''}</div>
-      <div class="kickoff-time">${fmtLocal(f.kickoff)}</div>
+      <div class="kickoff-time">${timeHtml}</div>
     </div>`;
   }).join('');
+  note.textContent = anyTbc
+    ? 'Matchups and dates are the official confirmed 2026/27 Premier League schedule. Kickoff times marked "TIME TBC" use a standard placeholder (3pm Sat/Sun, 8pm midweek) until the Premier League announces real broadcast times — the commissioner rechecks and updates these periodically.'
+    : 'Kickoff times shown in your own local time — confirmed against the official 2026/27 Premier League broadcast schedule.';
 }
 
 function renderDashboardTab(){
@@ -586,7 +643,7 @@ setInterval(async ()=>{
   const dashVisible = !document.querySelector('#tab-dashboard').classList.contains('hidden');
   if(dashVisible){ renderDashboardTab(); }
   const fxVisible = !document.querySelector('#tab-fixtures').classList.contains('hidden');
-  if(fxVisible){ renderFixturesTab(); }
+  if(fxVisible){ renderFixturesList(); }
 }, 20000);
 
 // ---------- PICK TAB ----------
@@ -791,26 +848,36 @@ document.querySelector('#addRosterNameBtn').addEventListener('click', async ()=>
   await renderCommish();
 });
 
+let commishFixtureGw = null;
+
 document.querySelector('#addFixtureBtn').addEventListener('click', async ()=>{
+  const targetGw = parseInt(document.querySelector('#commishFixtureGwSelect').value,10);
   const home = document.querySelector('#fixtureHome').value.trim();
   const away = document.querySelector('#fixtureAway').value.trim();
   const kickoffVal = document.querySelector('#fixtureKickoff').value;
   if(!home || !away || !kickoffVal){ toast('Fill in home, away, and kickoff time.'); return; }
   const kickoffIso = new Date(kickoffVal).toISOString();
-  const { error } = await sb.from('fixtures').insert({ gw: CACHE.gw, home, away, kickoff: kickoffIso });
+
+  const { data: gwExists } = await sb.from('gameweeks').select('gw').eq('gw', targetGw).maybeSingle();
+  if(!gwExists){
+    const cutoffGuess = new Date(new Date(kickoffIso).getTime() - 30*60000).toISOString();
+    await sb.from('gameweeks').insert({ gw: targetGw, deadline: cutoffGuess, first_kickoff: kickoffIso, closed:false });
+  }
+
+  const { error } = await sb.from('fixtures').insert({ gw: targetGw, home, away, kickoff: kickoffIso, time_confirmed: true });
   if(error){ toast('Could not add fixture.'); return; }
 
-  const { data: allFx } = await sb.from('fixtures').select('*').eq('gw', CACHE.gw).order('kickoff');
+  const { data: allFx } = await sb.from('fixtures').select('*').eq('gw', targetGw).order('kickoff');
   if(allFx && allFx.length){
     const earliest = allFx[0].kickoff;
     const cutoff = new Date(new Date(earliest).getTime() - 30*60000);
-    await sb.from('gameweeks').update({ first_kickoff: earliest, deadline: cutoff.toISOString() }).eq('gw', CACHE.gw);
+    await sb.from('gameweeks').update({ first_kickoff: earliest, deadline: cutoff.toISOString() }).eq('gw', targetGw);
   }
 
   document.querySelector('#fixtureHome').value = '';
   document.querySelector('#fixtureAway').value = '';
   document.querySelector('#fixtureKickoff').value = '';
-  toast('Fixture added — cutoff auto-synced to earliest kickoff.');
+  toast(`Fixture added to Gameweek ${targetGw} and marked confirmed.`);
   await renderCommish();
 });
 
@@ -875,15 +942,14 @@ async function renderCommish(){
     await renderCommish();
   }));
 
-  const fm = document.querySelector('#fixtureManageList');
-  fm.innerHTML = CACHE.fixtures.length
-    ? CACHE.fixtures.map(f=>`<div class="pill-row" style="margin-bottom:6px"><span>${f.home} vs ${f.away} — ${fmtLocal(f.kickoff)}</span><button class="btn danger sm" data-remove-fixture="${f.id}">Remove</button></div>`).join('')
-    : '<p class="small">No fixtures added yet.</p>';
-  fm.querySelectorAll('[data-remove-fixture]').forEach(b=>b.addEventListener('click', async ()=>{
-    await sb.from('fixtures').delete().eq('id', b.dataset.removeFixture);
-    toast('Fixture removed.');
-    await renderCommish();
-  }));
+  if(commishFixtureGw === null) commishFixtureGw = CACHE.gw;
+  const fgSel = document.querySelector('#commishFixtureGwSelect');
+  fgSel.innerHTML = buildGwOptions(commishFixtureGw);
+  fgSel.onchange = async ()=>{
+    commishFixtureGw = parseInt(fgSel.value,10);
+    await renderFixtureManageList();
+  };
+  await renderFixtureManageList();
 
   populateFavoriteSelects();
 
@@ -980,6 +1046,22 @@ async function renderCommish(){
   }
 }
 
+async function renderFixtureManageList(){
+  const { data: fx } = await sb.from('fixtures').select('*').eq('gw', commishFixtureGw).order('kickoff');
+  const fm = document.querySelector('#fixtureManageList');
+  fm.innerHTML = (fx && fx.length)
+    ? fx.map(f=>{
+        const confirmed = f.time_confirmed !== false;
+        return `<div class="pill-row" style="margin-bottom:6px"><span>${f.home} vs ${f.away} — ${confirmed?fmtLocal(f.kickoff):fmtDateOnly(f.kickoff)+' (time TBC)'}</span>${confirmed?'<span class="tag muted">Confirmed</span>':'<span class="tag gold">Time TBC</span>'}<button class="btn danger sm" data-remove-fixture="${f.id}">Remove</button></div>`;
+      }).join('')
+    : `<p class="small">No fixtures added yet for Gameweek ${commishFixtureGw}.</p>`;
+  fm.querySelectorAll('[data-remove-fixture]').forEach(b=>b.addEventListener('click', async ()=>{
+    await sb.from('fixtures').delete().eq('id', b.dataset.removeFixture);
+    toast('Fixture removed.');
+    await renderFixtureManageList();
+  }));
+}
+
 document.querySelector('#closeGwBtn').addEventListener('click', async ()=>{
   if(!isCommissioner()){ toast('Only the commissioner can close a gameweek.'); return; }
   await loadCore();
@@ -1020,12 +1102,31 @@ document.querySelector('#closeGwBtn').addEventListener('click', async ()=>{
   await sb.from('gameweek_exports').upsert({ gw, csv: csvText, generated_at: new Date().toISOString() });
 
   await sb.from('gameweeks').update({ closed: true }).eq('gw', gw);
-  const nextKickoff = CACHE.firstKickoff ? new Date(CACHE.firstKickoff) : new Date();
-  nextKickoff.setDate(nextKickoff.getDate()+7);
-  const nextCutoff = new Date(nextKickoff.getTime() - 30*60000);
-  await sb.from('gameweeks').insert({ gw: gw+1, deadline: nextCutoff.toISOString(), first_kickoff: nextKickoff.toISOString(), closed:false });
 
-  toast(`Gameweek ${gw} closed, CSV saved. Now on Gameweek ${gw+1}.`);
+  const nextGw = gw + 1;
+  const { data: existingNext } = await sb.from('gameweeks').select('*').eq('gw', nextGw).maybeSingle();
+  if(!existingNext){
+    const { data: nextFx } = await sb.from('fixtures').select('kickoff').eq('gw', nextGw).order('kickoff').limit(1);
+    let nextKickoffIso, nextCutoffIso;
+    if(nextFx && nextFx.length){
+      nextKickoffIso = nextFx[0].kickoff;
+      nextCutoffIso = new Date(new Date(nextKickoffIso).getTime() - 30*60000).toISOString();
+    } else {
+      const guessKickoff = CACHE.firstKickoff ? new Date(CACHE.firstKickoff) : new Date();
+      guessKickoff.setDate(guessKickoff.getDate()+7);
+      nextKickoffIso = guessKickoff.toISOString();
+      nextCutoffIso = new Date(guessKickoff.getTime() - 30*60000).toISOString();
+    }
+    await sb.from('gameweeks').insert({ gw: nextGw, deadline: nextCutoffIso, first_kickoff: nextKickoffIso, closed:false });
+  } else if(!existingNext.first_kickoff){
+    const { data: nextFx } = await sb.from('fixtures').select('kickoff').eq('gw', nextGw).order('kickoff').limit(1);
+    if(nextFx && nextFx.length){
+      const cutoff = new Date(new Date(nextFx[0].kickoff).getTime() - 30*60000).toISOString();
+      await sb.from('gameweeks').update({ first_kickoff: nextFx[0].kickoff, deadline: cutoff }).eq('gw', nextGw);
+    }
+  }
+
+  toast(`Gameweek ${gw} closed, CSV saved. Now on Gameweek ${nextGw}.`);
   await renderCommish();
 });
 
@@ -1033,7 +1134,7 @@ document.querySelector('#closeGwBtn').addEventListener('click', async ()=>{
 async function renderAll(){
   await loadCore();
   await renderPickArea();
-  renderFixturesTab();
+  await renderFixturesTab();
   await renderLedger();
   await renderTracker();
   renderRules();
