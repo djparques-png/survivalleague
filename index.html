@@ -27,6 +27,7 @@ input.pin-input{letter-spacing:8px;font-size:20px;text-align:center;font-weight:
 label.field{display:block;margin-bottom:12px}
 label.field span{display:block;color:var(--muted);font-size:12px;margin-bottom:5px;font-weight:600}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
 .teams{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}
 .team{position:relative;border:1px solid var(--line);border-radius:11px;padding:11px 12px;background:#0b1812;cursor:pointer;transition:.15s;text-align:center}
 .team:hover{border-color:#628c70}
@@ -39,6 +40,7 @@ label.field span{display:block;color:var(--muted);font-size:12px;margin-bottom:5
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
 .btn.danger{background:var(--danger);color:#2a0a06}
+.btn.gold{background:var(--gold);color:#241a04}
 .btn.sm{padding:8px 12px;font-size:12px;border-radius:9px}
 .small{color:var(--muted);font-size:13px}
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -50,6 +52,7 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
 .chip.loss{background:#ff806f22;color:var(--danger)}
 .chip.avail{background:#a9b7ad18;color:var(--muted)}
 .chip.pending{background:#f8c65a22;color:var(--gold)}
+.chip.fav{background:#ff806f22;color:var(--danger)}
 .pill-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .two-col{display:grid;grid-template-columns:1.3fr .7fr;gap:16px}
 .hidden{display:none !important}
@@ -107,7 +110,12 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
 .your-pick-panel{text-align:center;padding:10px 0}
 .your-pick-panel .team-name{font-size:30px;font-weight:850;color:var(--lime);margin:8px 0 4px}
 .debug-error{background:#ff806f14;border:1px solid #ff806f55;color:#ffb3a6;font-size:11px;padding:8px 10px;border-radius:8px;margin-top:10px;font-family:monospace}
-@media(max-width:780px){.two-col,.row,.ledger-cols{grid-template-columns:1fr}.teams,.name-grid{grid-template-columns:repeat(2,1fr)}.shell{padding:15px}table{font-size:12px}th,td{padding:7px 5px}}
+.fixture-row{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#0b1812;margin-bottom:8px}
+.fixture-row .teams-vs{font-weight:700}
+.fixture-row .kickoff-time{color:var(--muted);font-size:12.5px}
+.spin-result{text-align:center;padding:16px;border:2px dashed var(--gold);border-radius:14px;margin-top:10px}
+.spin-result .team-name{font-size:24px;font-weight:850;color:var(--gold)}
+@media(max-width:780px){.two-col,.row,.row3,.ledger-cols{grid-template-columns:1fr}.teams,.name-grid{grid-template-columns:repeat(2,1fr)}.shell{padding:15px}table{font-size:12px}th,td{padding:7px 5px}}
 </style>
 </head>
 <body>
@@ -117,7 +125,7 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
     <div class="card authcard"><div class="crest">♛</div><p class="small" style="margin-top:10px">Connecting to the league…</p></div>
   </div>
 
-  <!-- AUTH SCREEN (no roster dashboard shown pre-login) -->
+  <!-- AUTH SCREEN -->
   <div id="authScreen" class="hidden">
     <header class="top"><div class="brand"><div class="crest">♛</div> SURVIVAL LEAGUE</div></header>
     <div class="authwrap">
@@ -167,6 +175,7 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
     </header>
     <div class="tabs" style="margin-bottom:18px">
       <div class="tab active" data-tab="pick">Make Pick</div>
+      <div class="tab" data-tab="fixtures">Fixtures</div>
       <div class="tab" data-tab="ledger">My Ledger</div>
       <div class="tab" data-tab="tracker">Tracker</div>
       <div class="tab" data-tab="rules">Rules</div>
@@ -194,6 +203,13 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
       </div>
     </section>
 
+    <section id="tab-fixtures" class="hidden">
+      <div class="card">
+        <div class="section-title"><h2 id="fixturesTitle">Gameweek 1 fixtures</h2><span class="tag">Kickoff times in your local time</span></div>
+        <div id="fixturesList"></div>
+      </div>
+    </section>
+
     <section id="tab-ledger" class="hidden">
       <div class="card">
         <div class="section-title"><h2 id="ledgerTitle">Your ledger</h2><span class="tag" id="ledgerLifeTag"></span></div>
@@ -217,12 +233,12 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
         <div class="entry-banner"><div><b>Entry fee: $25 per person</b><div class="small">No wager, no play.</div></div><span class="tag gold">4th installment of the Survival League</span></div>
         <div class="section-title"><h2>How it works</h2></div>
         <ul class="rules-list">
-          <li class="rule-item"><span class="rule-num">1</span><div class="rule-body"><b>Pick a winner, every week</b><span>Your team must win outright.</span></div></li>
-          <li class="rule-item"><span class="rule-num">2</span><div class="rule-body"><b>No repeats, all season</b><span>Once you pick a team, it's gone for good.</span></div></li>
-          <li class="rule-item"><span class="rule-num">3</span><div class="rule-body"><b>Losing or drawing means you're out</b><span>Unless you use a life line.</span></div></li>
-          <li class="rule-item"><span class="rule-num">4</span><div class="rule-body"><b>Missed deadline = auto-pick</b><span>The commissioner assigns the most-favored team of the weekend.</span></div></li>
+          <li class="rule-item"><span class="rule-num">1</span><div class="rule-body"><b>Pick a winner, every week</b><span>Your team must win outright — no draws or losses allowed. Only wins survive (unless a life line is used).</span></div></li>
+          <li class="rule-item"><span class="rule-num">2</span><div class="rule-body"><b>No repeats, all season</b><span>Once you pick a team, it's gone for good — pick United, that's probably your last pick for everyone.</span></div></li>
+          <li class="rule-item"><span class="rule-num">3</span><div class="rule-body"><b>Losing or drawing means you're out</b><span>If your chosen team loses or ties, you're out. You did NOT survive!</span></div></li>
+          <li class="rule-item"><span class="rule-num">4</span><div class="rule-body"><b>Missing the deadline</b><span>We spin the wheel excluding the top 3 favorites. Miss 2 deadlines? You lose a life line + we spin. Miss 3? Another life line + we spin. Miss more than 3? We just spin.</span></div></li>
           <li class="rule-item"><span class="rule-num">5</span><div class="rule-body"><b>Pick deadline</b><span>30 minutes before the first kickoff of the gameweek, shown in your own local time.</span></div></li>
-          <li class="rule-item"><span class="rule-num">6</span><div class="rule-body"><b>Winner takes all</b><span>Last survivor takes the full pot.</span></div></li>
+          <li class="rule-item"><span class="rule-num">6</span><div class="rule-body"><b>Winner takes all</b><span>Last survivor takes the full pot. Can split a maximum of 2 ways if exactly 2 players survive to the end.</span></div></li>
           <li class="rule-item"><span class="rule-num">7</span><div class="rule-body"><b>Life line rule</b><span>2 life lines per season. A draw with a life line survives but burns it. A win keeps it but locks it for 5 gameweeks.</span></div></li>
         </ul>
         <div class="democracy">The commish can't see what you submit. He sees what you see. #democracy</div>
@@ -259,15 +275,31 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
           </div>
           <div id="rosterManageList" style="margin-top:14px"></div>
         </div>
-        <div class="card"><div class="section-title"><h2>Accounts</h2></div><div id="accountList" style="margin-top:10px"></div></div>
         <div class="card">
-          <div class="section-title"><h2 id="commishGwTitle">Gameweek settings</h2><span class="tag" id="gwOpenTag">Open</span></div>
-          <label class="field"><span>First kickoff of the gameweek (your local time — check the EPL schedule)</span><input type="datetime-local" id="kickoffInput"></label>
-          <p class="small" id="cutoffPreview">Cutoff will be set automatically to 30 minutes before this kickoff, shown to every player in their own local time.</p>
+          <div class="section-title"><h2>Fixtures for this gameweek</h2><span class="tag">Sets kickoff automatically</span></div>
+          <p class="small">Add every fixture for this gameweek. The earliest kickoff you enter automatically becomes the cutoff time (30 min before), synced for everyone.</p>
+          <div class="row3" style="margin-top:10px">
+            <input type="text" id="fixtureHome" placeholder="Home team">
+            <input type="text" id="fixtureAway" placeholder="Away team">
+            <input type="datetime-local" id="fixtureKickoff">
+          </div>
+          <button class="btn ghost sm" id="addFixtureBtn" style="margin-top:10px">Add fixture</button>
+          <div id="fixtureManageList" style="margin-top:14px"></div>
         </div>
+        <div class="card">
+          <div class="section-title"><h2>Top 3 favorites this gameweek</h2><span class="tag danger">Excluded from the spin</span></div>
+          <p class="small">Set the 3 bookmaker favorites for this gameweek — the spin-the-wheel tool will never land on these for a missed pick.</p>
+          <div class="row3" style="margin-top:10px">
+            <select id="fav1"></select>
+            <select id="fav2"></select>
+            <select id="fav3"></select>
+          </div>
+          <button class="btn ghost sm" id="saveFavoritesBtn" style="margin-top:10px">Save favorites</button>
+        </div>
+        <div class="card"><div class="section-title"><h2>Accounts</h2></div><div id="accountList" style="margin-top:10px"></div></div>
         <div class="card"><div class="section-title"><h2>Submission status (commissioner view)</h2></div><div id="commishCounter" class="small" style="margin-top:8px;font-weight:700"></div></div>
         <div id="sensitiveCommishArea">
-          <div class="card"><div class="section-title"><h2>Missed the cutoff</h2><span class="tag danger">Rule 4 — auto-assign</span></div><div id="missedArea"></div></div>
+          <div class="card"><div class="section-title"><h2>Missed the cutoff</h2><span class="tag danger">Rule 4 — spin the wheel</span></div><div id="missedArea"></div></div>
           <div class="card"><div class="section-title"><h2>Close & score gameweek</h2><span class="tag gold">Reveals picks + updates tracker + saves CSV</span></div><div id="scoreArea"></div><button class="btn" id="closeGwBtn" style="margin-top:14px">Close gameweek & reveal picks</button></div>
         </div>
         <div class="card">
@@ -307,7 +339,7 @@ document.querySelectorAll('.pin-input').forEach(inp=>{
 });
 
 let claimingName = null;
-let CACHE = { roster:[], claimedNames:[], gw:1, deadline:null, firstKickoff:null, closed:false, usedTeams:{}, playerState:{}, submitted:0, submittedNames:[] };
+let CACHE = { roster:[], claimedNames:[], gw:1, deadline:null, firstKickoff:null, closed:false, usedTeams:{}, playerState:{}, submitted:0, submittedNames:[], fixtures:[], top3Favorites:[] };
 
 function toast(msg){
   const t=document.querySelector('#toast');
@@ -330,8 +362,12 @@ async function loadCore(){
   CACHE.roster = (rosterRows||[]).map(r=>r.name);
 
   const { data: gws } = await sb.from('gameweeks').select('*').order('gw',{ascending:false}).limit(1);
-  const gw = gws && gws[0] ? gws[0] : { gw:1, deadline:new Date().toISOString(), closed:false, first_kickoff:null };
+  const gw = gws && gws[0] ? gws[0] : { gw:1, deadline:new Date().toISOString(), closed:false, first_kickoff:null, top3_favorites:[] };
   CACHE.gw = gw.gw; CACHE.deadline = gw.deadline; CACHE.closed = gw.closed; CACHE.firstKickoff = gw.first_kickoff;
+  CACHE.top3Favorites = gw.top3_favorites || [];
+
+  const { data: fx } = await sb.from('fixtures').select('*').eq('gw', gw.gw).order('kickoff');
+  CACHE.fixtures = fx || [];
 
   const { data: names } = await sb.from('claimed_names').select('name');
   CACHE.claimedNames = (names||[]).map(r=>r.name);
@@ -493,10 +529,11 @@ document.querySelectorAll('#appScreen .tab').forEach(tab=>{
   tab.addEventListener('click', async ()=>{
     document.querySelectorAll('#appScreen .tab').forEach(t=>t.classList.remove('active'));
     tab.classList.add('active');
-    ['pick','ledger','tracker','rules','dashboard','commish'].forEach(name=>{
+    ['pick','fixtures','ledger','tracker','rules','dashboard','commish'].forEach(name=>{
       document.querySelector('#tab-'+name).classList.toggle('hidden', name!==tab.dataset.tab);
     });
     await loadCore();
+    if(tab.dataset.tab==='fixtures') renderFixturesTab();
     if(tab.dataset.tab==='ledger') await renderLedger();
     if(tab.dataset.tab==='tracker') await renderTracker();
     if(tab.dataset.tab==='rules') renderRules();
@@ -505,6 +542,22 @@ document.querySelectorAll('#appScreen .tab').forEach(tab=>{
     if(tab.dataset.tab==='pick'){ await renderPickArea(); }
   });
 });
+
+function renderFixturesTab(){
+  document.querySelector('#fixturesTitle').textContent = `Gameweek ${CACHE.gw} fixtures`;
+  const list = document.querySelector('#fixturesList');
+  if(!CACHE.fixtures.length){
+    list.innerHTML = '<p class="small">No fixtures added yet for this gameweek — check back soon.</p>';
+    return;
+  }
+  list.innerHTML = CACHE.fixtures.map(f=>{
+    const isFav = CACHE.top3Favorites.includes(f.home) || CACHE.top3Favorites.includes(f.away);
+    return `<div class="fixture-row">
+      <div><span class="teams-vs">${f.home} vs ${f.away}</span>${isFav?' <span class="chip fav">Favorite in this match</span>':''}</div>
+      <div class="kickoff-time">${fmtLocal(f.kickoff)}</div>
+    </div>`;
+  }).join('');
+}
 
 function renderDashboardTab(){
   document.querySelector('#rosterCountTag2').textContent = `${CACHE.claimedNames.length} / ${CACHE.roster.length} claimed`;
@@ -532,17 +585,19 @@ setInterval(async ()=>{
   if(pickTabVisible){ await renderPickArea(); }
   const dashVisible = !document.querySelector('#tab-dashboard').classList.contains('hidden');
   if(dashVisible){ renderDashboardTab(); }
+  const fxVisible = !document.querySelector('#tab-fixtures').classList.contains('hidden');
+  if(fxVisible){ renderFixturesTab(); }
 }, 20000);
 
 // ---------- PICK TAB ----------
 function playerUsed(name){ return CACHE.usedTeams[name] || []; }
-function playerState(name){ return CACHE.playerState[name] || { eliminated:false, life_lines_left:2, life_line_lock_until:0 }; }
+function playerState(name){ return CACHE.playerState[name] || { eliminated:false, life_lines_left:2, life_line_lock_until:0, missed_deadlines:0 }; }
 
 function renderYourPickPanel(myPick, errMsg){
   const panel = document.querySelector('#yourPickPanel');
   const debugArea = document.querySelector('#pickDebug');
   if(myPick){
-    panel.innerHTML = `<div class="your-pick-panel"><div class="small">Gameweek ${CACHE.gw}</div><div class="team-name">${myPick.team}</div><div class="small">${myPick.life_line?'🛡️ Life line used':'No life line used'}${myPick.auto_assigned?' · ⏰ Auto-assigned':''}</div></div>`;
+    panel.innerHTML = `<div class="your-pick-panel"><div class="small">Gameweek ${CACHE.gw}</div><div class="team-name">${myPick.team}</div><div class="small">${myPick.life_line?'🛡️ Life line used':'No life line used'}${myPick.auto_assigned?' · 🎡 Spun (missed deadline)':''}</div></div>`;
   } else {
     panel.innerHTML = `<div class="your-pick-panel"><div class="small">You haven't submitted a pick yet this gameweek.</div></div>`;
   }
@@ -572,7 +627,7 @@ async function renderPickArea(){
   renderYourPickPanel(myPick, errMsg);
 
   if(myPick){
-    area.innerHTML = `<div class="lock"><b>Pick locked in ✅</b>You selected <b>${myPick.team}</b>${myPick.life_line?' with a life line':''} for Gameweek ${gw}.${myPick.auto_assigned?' <br><span class="badge-missed">Auto-assigned — you missed the cutoff</span>':''} You cannot change it.</div>`;
+    area.innerHTML = `<div class="lock"><b>Pick locked in ✅</b>You selected <b>${myPick.team}</b>${myPick.life_line?' with a life line':''} for Gameweek ${gw}.${myPick.auto_assigned?' <br><span class="badge-missed">🎡 Spun — you missed the cutoff</span>':''} You cannot change it.</div>`;
     return;
   }
   if(CACHE.closed){
@@ -580,7 +635,7 @@ async function renderPickArea(){
     return;
   }
   if(deadlinePassed()){
-    area.innerHTML = `<div class="lock danger"><b>Cutoff has passed</b>You didn't submit before ${fmtDeadline()}. Per Rule 4, the commissioner will assign you the most-favored team for this gameweek.</div>`;
+    area.innerHTML = `<div class="lock danger"><b>Cutoff has passed</b>You didn't submit before ${fmtDeadline()}. Per Rule 4, the commissioner will spin the wheel for you.</div>`;
     return;
   }
 
@@ -696,7 +751,7 @@ async function renderTracker(){
     const rows2 = (picks||[]).map(p=>{
       const r = resMap[p.team] || 'pending';
       const cls = r==='win'?'win':r==='draw'?'draw':'loss';
-      return `<div class="pill-row" style="margin-bottom:6px"><b style="min-width:90px;display:inline-block">${p.player_name}</b><span class="chip ${cls}">${p.team} — ${r}${p.life_line?' 🛡️ life line':''}${p.auto_assigned?' ⏰ auto':''}</span></div>`;
+      return `<div class="pill-row" style="margin-bottom:6px"><b style="min-width:90px;display:inline-block">${p.player_name}</b><span class="chip ${cls}">${p.team} — ${r}${p.life_line?' 🛡️ life line':''}${p.auto_assigned?' 🎡 spun':''}</span></div>`;
     }).join('');
     html += `<div style="margin-bottom:16px"><div class="section-title"><h3 style="margin:0;font-size:15px">Gameweek ${gw}</h3><button class="btn ghost sm" data-download-gw="${gw}">Download CSV</button></div>${rows2}</div>`;
   }
@@ -736,14 +791,44 @@ document.querySelector('#addRosterNameBtn').addEventListener('click', async ()=>
   await renderCommish();
 });
 
-document.querySelector('#kickoffInput').addEventListener('change', async (e)=>{
-  const kickoff = new Date(e.target.value);
-  const cutoff = new Date(kickoff.getTime() - 30*60000);
-  const { error } = await sb.from('gameweeks').update({ first_kickoff: kickoff.toISOString(), deadline: cutoff.toISOString() }).eq('gw', CACHE.gw);
-  if(error){ toast('Could not update kickoff/cutoff.'); return; }
-  toast(`Cutoff set to ${fmtLocal(cutoff.toISOString())} (30 min before kickoff) — synced for everyone.`);
+document.querySelector('#addFixtureBtn').addEventListener('click', async ()=>{
+  const home = document.querySelector('#fixtureHome').value.trim();
+  const away = document.querySelector('#fixtureAway').value.trim();
+  const kickoffVal = document.querySelector('#fixtureKickoff').value;
+  if(!home || !away || !kickoffVal){ toast('Fill in home, away, and kickoff time.'); return; }
+  const kickoffIso = new Date(kickoffVal).toISOString();
+  const { error } = await sb.from('fixtures').insert({ gw: CACHE.gw, home, away, kickoff: kickoffIso });
+  if(error){ toast('Could not add fixture.'); return; }
+
+  const { data: allFx } = await sb.from('fixtures').select('*').eq('gw', CACHE.gw).order('kickoff');
+  if(allFx && allFx.length){
+    const earliest = allFx[0].kickoff;
+    const cutoff = new Date(new Date(earliest).getTime() - 30*60000);
+    await sb.from('gameweeks').update({ first_kickoff: earliest, deadline: cutoff.toISOString() }).eq('gw', CACHE.gw);
+  }
+
+  document.querySelector('#fixtureHome').value = '';
+  document.querySelector('#fixtureAway').value = '';
+  document.querySelector('#fixtureKickoff').value = '';
+  toast('Fixture added — cutoff auto-synced to earliest kickoff.');
   await renderCommish();
-  renderCountdown();
+});
+
+function populateFavoriteSelects(){
+  const opts = '<option value="">— none —</option>' + PL_TEAMS.map(t=>`<option value="${t}">${t}</option>`).join('');
+  ['fav1','fav2','fav3'].forEach((id,i)=>{
+    const sel = document.querySelector('#'+id);
+    sel.innerHTML = opts;
+    sel.value = CACHE.top3Favorites[i] || '';
+  });
+}
+
+document.querySelector('#saveFavoritesBtn').addEventListener('click', async ()=>{
+  const favs = ['fav1','fav2','fav3'].map(id=>document.querySelector('#'+id).value).filter(Boolean);
+  const { error } = await sb.from('gameweeks').update({ top3_favorites: favs }).eq('gw', CACHE.gw);
+  if(error){ toast('Could not save favorites.'); return; }
+  toast('Top 3 favorites saved for this gameweek.');
+  await renderCommish();
 });
 
 document.querySelector('#downloadSeasonCsvBtn').addEventListener('click', async ()=>{
@@ -768,13 +853,6 @@ async function renderCommish(){
   document.querySelector('#commishDenied').classList.add('hidden');
   document.querySelector('#commishPanel').classList.remove('hidden');
 
-  document.querySelector('#commishGwTitle').textContent = 'Gameweek '+CACHE.gw+' settings';
-  document.querySelector('#gwOpenTag').textContent = CACHE.closed ? 'Closed' : (deadlinePassed()?'Cutoff passed':'Open');
-  document.querySelector('#kickoffInput').value = toLocalInputValue(CACHE.firstKickoff);
-  document.querySelector('#cutoffPreview').textContent = CACHE.deadline
-    ? `Current cutoff: ${fmtLocal(CACHE.deadline)} (30 min before kickoff). Shown to every player in their own local time automatically.`
-    : 'Cutoff will be set automatically to 30 minutes before this kickoff, shown to every player in their own local time.';
-
   const rm = document.querySelector('#rosterManageList');
   rm.innerHTML = CACHE.roster.map(n=>{
     const claimed = CACHE.claimedNames.includes(n);
@@ -797,6 +875,18 @@ async function renderCommish(){
     await renderCommish();
   }));
 
+  const fm = document.querySelector('#fixtureManageList');
+  fm.innerHTML = CACHE.fixtures.length
+    ? CACHE.fixtures.map(f=>`<div class="pill-row" style="margin-bottom:6px"><span>${f.home} vs ${f.away} — ${fmtLocal(f.kickoff)}</span><button class="btn danger sm" data-remove-fixture="${f.id}">Remove</button></div>`).join('')
+    : '<p class="small">No fixtures added yet.</p>';
+  fm.querySelectorAll('[data-remove-fixture]').forEach(b=>b.addEventListener('click', async ()=>{
+    await sb.from('fixtures').delete().eq('id', b.dataset.removeFixture);
+    toast('Fixture removed.');
+    await renderCommish();
+  }));
+
+  populateFavoriteSelects();
+
   const player = getSession();
   const selfSubmitted = await hasSubmittedThisGw(player);
   const needsFairPlayGate = !CACHE.closed && !deadlinePassed() && !selfSubmitted;
@@ -807,9 +897,11 @@ async function renderCommish(){
   const al = document.querySelector('#accountList');
   al.innerHTML = CACHE.roster.map(n=>{
     const claimed = CACHE.claimedNames.includes(n);
+    const ps = playerState(n);
     return `<div class="pill-row" style="margin-bottom:6px">
       <span style="min-width:150px;display:inline-block">${n}</span>
       ${claimed?'<span class="badge-claimed">Claimed</span>':'<span class="badge-open">Open</span>'}
+      ${claimed?`<span class="small">Missed deadlines: ${ps.missed_deadlines??0}</span>`:''}
     </div>`;
   }).join('');
 
@@ -835,26 +927,41 @@ async function renderCommish(){
 
   const missedArea = document.querySelector('#missedArea');
   if(!deadlinePassed()){
-    missedArea.innerHTML = "<p class='small'>Cutoff has not passed yet — nothing to assign.</p>";
+    missedArea.innerHTML = "<p class='small'>Cutoff has not passed yet — nothing to spin for.</p>";
   } else if(!missing.length){
-    missedArea.innerHTML = "<p class='small'>Everyone submitted before the cutoff. Nothing to assign.</p>";
+    missedArea.innerHTML = "<p class='small'>Everyone submitted before the cutoff. Nothing to spin for.</p>";
+  } else if(CACHE.top3Favorites.length < 3){
+    missedArea.innerHTML = "<p class='small'>Set the top 3 favorites above before spinning for missed picks.</p>";
   } else {
     missedArea.innerHTML = missing.map(p=>{
-      const used = playerUsed(p);
-      const options = PL_TEAMS.filter(t=>!used.includes(t)).map(t=>`<option value="${t}">${t}</option>`).join('');
-      return `<div class="pill-row" style="margin-bottom:8px">
-        <span style="min-width:130px;display:inline-block"><b>${p}</b></span>
-        <select data-assign-player="${p}" style="max-width:220px">${options}</select>
-        <button class="btn ghost sm" data-confirm-assign="${p}">Assign pick</button>
+      const ps = playerState(p);
+      return `<div class="pill-row" style="margin-bottom:8px;flex-direction:column;align-items:flex-start;width:100%">
+        <div class="pill-row"><b>${p}</b><span class="small">Missed deadlines so far: ${ps.missed_deadlines??0}</span>
+        <button class="btn gold sm" data-spin-player="${p}">🎡 Spin the wheel</button></div>
+        <div id="spinResult-${p.replace(/[^a-zA-Z0-9]/g,'')}"></div>
       </div>`;
     }).join('');
-    missedArea.querySelectorAll('[data-confirm-assign]').forEach(b=>b.addEventListener('click', async ()=>{
-      const p = b.dataset.confirmAssign;
-      const sel = document.querySelector(`[data-assign-player="${p}"]`);
-      const team = sel.value;
-      const { error } = await sb.from('picks').insert({ gw: CACHE.gw, player_name: p, team, life_line:false, auto_assigned:true });
-      if(error){ toast('Could not assign — try again.'); return; }
-      toast(`Assigned ${team} to ${p} (missed cutoff).`);
+    missedArea.querySelectorAll('[data-spin-player]').forEach(b=>b.addEventListener('click', async ()=>{
+      const p = b.dataset.spinPlayer;
+      const used = playerUsed(p);
+      const eligible = PL_TEAMS.filter(t=>!used.includes(t) && !CACHE.top3Favorites.includes(t));
+      if(!eligible.length){ toast(`No eligible teams left to spin for ${p}.`); return; }
+      const spun = eligible[Math.floor(Math.random()*eligible.length)];
+      const resultBox = document.querySelector(`#spinResult-${p.replace(/[^a-zA-Z0-9]/g,'')}`);
+      resultBox.innerHTML = `<div class="spin-result"><div class="small">🎡 Landed on</div><div class="team-name">${spun}</div></div>`;
+
+      const { error } = await sb.from('picks').insert({ gw: CACHE.gw, player_name: p, team: spun, life_line:false, auto_assigned:true });
+      if(error){ toast('Could not assign spun team — try again.'); return; }
+
+      const ps = playerState(p);
+      const newMissed = (ps.missed_deadlines ?? 0) + 1;
+      let update = { missed_deadlines: newMissed };
+      if(newMissed === 2 || newMissed === 3){
+        update.life_lines_left = Math.max(0, (ps.life_lines_left ?? 2) - 1);
+      }
+      await sb.from('player_state').update(update).eq('player_name', p);
+
+      toast(`🎡 ${p} spun and landed on ${spun}. Missed deadlines: ${newMissed}${(newMissed===2||newMissed===3)?' — life line lost!':''}`);
       await renderCommish();
     }));
   }
@@ -926,6 +1033,7 @@ document.querySelector('#closeGwBtn').addEventListener('click', async ()=>{
 async function renderAll(){
   await loadCore();
   await renderPickArea();
+  renderFixturesTab();
   await renderLedger();
   await renderTracker();
   renderRules();
